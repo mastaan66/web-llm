@@ -3,7 +3,7 @@ import axios from "axios";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
-import "highlight.js/styles/github.css"; // or any highlight.js theme
+import "highlight.js/styles/github.css";
 import {
   PaperAirplaneIcon,
   SunIcon,
@@ -21,7 +21,6 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
 
-  // --- Load sessions & current session ---
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem("chat_sessions") || "[]");
     setSessions(stored);
@@ -38,7 +37,6 @@ export default function App() {
     setSessionId(sid);
   }, []);
 
-  // --- Load messages for this session ---
   useEffect(() => {
     if (!sessionId) return;
     localStorage.setItem("current_session", sessionId);
@@ -56,7 +54,6 @@ export default function App() {
       .catch(console.error);
   }, [sessionId]);
 
-  // --- Update session title from first user message ---
   useEffect(() => {
     if (!messages.length) return;
     const firstUser = messages.find((m) => m.isUser);
@@ -92,7 +89,6 @@ export default function App() {
         spinner: "#3b82f6",
       };
 
-  // --- Handlers ---
   const handleNewChat = () => {
     const id = uuidv4();
     const newSess = { id, title: "New Chat" };
@@ -133,7 +129,6 @@ export default function App() {
     }
   };
 
-  // --- Auto-scroll chat to bottom ---
   useEffect(() => {
     const c = document.getElementById("chat-container");
     if (c) c.scrollTop = c.scrollHeight;
@@ -141,7 +136,6 @@ export default function App() {
 
   return (
     <div className="flex h-screen" style={{ backgroundColor: colors.background, color: colors.text }}>
-      {/* Sidebar */}
       <aside className="w-64 p-4 overflow-y-auto" style={{ backgroundColor: colors.surface, color: colors.text }}>
         <button
           onClick={handleNewChat}
@@ -168,9 +162,7 @@ export default function App() {
         </nav>
       </aside>
 
-      {/* Main chat area */}
       <div className="flex-1 flex flex-col">
-        {/* Header */}
         <header className="p-4 shadow flex justify-between items-center" style={{ backgroundColor: colors.surface, color: colors.text }}>
           <h1 className="text-xl font-bold">chat.ai</h1>
           <button onClick={() => setDarkMode(!darkMode)} className="p-2 rounded-full">
@@ -182,12 +174,7 @@ export default function App() {
           </button>
         </header>
 
-        {/* Messages */}
-        <div
-          id="chat-container"
-          className="flex-1 overflow-y-auto px-4 py-6"
-          style={{ backgroundColor: colors.background, color: colors.text }}
-        >
+        <div id="chat-container" className="flex-1 overflow-y-auto px-4 py-6" style={{ backgroundColor: colors.background, color: colors.text }}>
           {messages.length === 0 ? (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center mt-20 opacity-70">
               <p style={{ color: colors.text }}>Welcome! Start by typing a message.</p>
@@ -204,28 +191,37 @@ export default function App() {
                         color: m.isUser ? "#fff" : colors.text,
                       }}
                     >
-                      {/* Render Markdown for bot, plain text for user */}
                       {m.isUser ? (
                         <p style={{ margin: 0 }}>{m.text}</p>
                       ) : (
-                        <ReactMarkdown
-                          children={m.text}
-                          remarkPlugins={[remarkGfm]}
-                          rehypePlugins={[rehypeHighlight]}
-                          components={{
-                            code({ node, inline, className, children, ...props }) {
-                              return inline ? (
-                                <code style={{ backgroundColor: "#eee", padding: "0.2em 0.4em", borderRadius: "4px" }} {...props}>
-                                  {children}
-                                </code>
-                              ) : (
-                                <pre className={className} style={{ overflowX: "auto", padding: "0.5rem", margin: 0 }}>
-                                  <code {...props}>{children}</code>
-                                </pre>
-                              );
-                            },
-                          }}
-                        />
+                        <div className="prose prose-sm dark:prose-invert">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            rehypePlugins={[rehypeHighlight]}
+                            components={{
+                              code({ node, inline, className, children, ...props }) {
+                                return inline ? (
+                                  <code
+                                    style={{
+                                      backgroundColor: "#eee",
+                                      padding: "0.2em 0.4em",
+                                      borderRadius: "4px",
+                                    }}
+                                    {...props}
+                                  >
+                                    {children}
+                                  </code>
+                                ) : (
+                                  <pre className={className} style={{ overflowX: "auto", padding: "0.5rem", margin: 0 }}>
+                                    <code {...props}>{children}</code>
+                                  </pre>
+                                );
+                              },
+                            }}
+                          >
+                            {m.text}
+                          </ReactMarkdown>
+                        </div>
                       )}
                     </div>
                   </motion.div>
@@ -245,7 +241,6 @@ export default function App() {
           )}
         </div>
 
-        {/* Input at bottom */}
         <form onSubmit={handleSubmit} className="p-4 shadow-inner" style={{ backgroundColor: colors.surface, color: colors.text }}>
           <div className="max-w-3xl mx-auto flex gap-2">
             <input
