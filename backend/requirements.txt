@@ -1,0 +1,8 @@
+# Required Packages
+flask
+flask-cors
+requests
+beautifulsoup4
+readability-lxml
+openai
+python-dotenv
