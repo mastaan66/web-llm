@@ -71,8 +71,8 @@ export default function App() {
 
   const colors = darkMode
     ? {
-        background: "#1e1e1e",
-        surface: "#25263a",
+        background: "#000000",
+        surface: "#090a0b",
         text: "#ffffff",
         input: "#2d2f45",
         userBubble: "#3b82f6",
