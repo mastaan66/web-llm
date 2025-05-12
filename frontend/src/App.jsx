@@ -31,47 +31,63 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [menuOpen, setMenuOpen] = useState(null);
+  const [showSidebar, setShowSidebar] = useState(true);
 
+  // Initialize sessions and current session
   useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem("chat_sessions") || "[]");
-    setSessions(stored);
-    let sid = localStorage.getItem("current_session");
-    if (!sid) {
-      sid = uuidv4();
-      localStorage.setItem("current_session", sid);
-      const newSess = { id: sid, title: "New Chat" };
-      const updated = [newSess, ...stored];
-      setSessions(updated);
-      localStorage.setItem("chat_sessions", JSON.stringify(updated));
+    const storedSessions = JSON.parse(localStorage.getItem("chat_sessions") || "[]");
+    setSessions(storedSessions);
+    setShowSidebar(storedSessions.length > 0);
+    
+    let currentSessionId = localStorage.getItem("current_session");
+    if (!currentSessionId || !storedSessions.some(s => s.id === currentSessionId)) {
+      currentSessionId = uuidv4();
+      const newSession = { id: currentSessionId, title: "New Chat" };
+      const updatedSessions = [newSession, ...storedSessions];
+      setSessions(updatedSessions);
+      localStorage.setItem("chat_sessions", JSON.stringify(updatedSessions));
+      setShowSidebar(true);
     }
-    setSessionId(sid);
+    setSessionId(currentSessionId);
   }, []);
 
+  // Load messages for current session
   useEffect(() => {
     if (!sessionId) return;
-    localStorage.setItem("current_session", sessionId);
-    axios
-      .get(`http://localhost:5000/memory/${sessionId}`)
-      .then((res) => {
+    
+    const loadMessages = async () => {
+      try {
+        const response = await axios.get(`http://localhost:5000/memory/${sessionId}`);
         setMessages(
-          res.data.map((m, i) => ({
+          response.data.map((m, i) => ({
             id: i,
             text: m.content,
             isUser: m.role === "user",
           }))
         );
-      })
-      .catch(console.error);
+      } catch (error) {
+        console.error("Error loading messages:", error);
+        // If session doesn't exist in backend, create a fresh one
+        if (error.response?.status === 404) {
+          setMessages([]);
+        }
+      }
+    };
+
+    loadMessages();
   }, [sessionId]);
 
+  // Update session titles when messages change
   useEffect(() => {
-    if (!messages.length) return;
-    const firstUser = messages.find((m) => m.isUser);
-    if (!firstUser) return;
-    setSessions((prev) => {
-      const updated = prev.map((s) =>
+    if (!messages.length || !sessionId) return;
+    
+    const firstUserMessage = messages.find(m => m.isUser);
+    if (!firstUserMessage) return;
+    
+    setSessions(prev => {
+      const updated = prev.map(s =>
         s.id === sessionId
-          ? { ...s, title: firstUser.text.slice(0, 20) + "…" }
+          ? { ...s, title: firstUserMessage.text.slice(0, 20) + "…" }
           : s
       );
       localStorage.setItem("chat_sessions", JSON.stringify(updated));
@@ -100,13 +116,15 @@ export default function App() {
       };
 
   const handleNewChat = () => {
-    const id = uuidv4();
-    const newSess = { id, title: "New Chat" };
-    const updated = [newSess, ...sessions];
-    setSessions(updated);
-    localStorage.setItem("chat_sessions", JSON.stringify(updated));
-    setSessionId(id);
+    const newSessionId = uuidv4();
+    const newSession = { id: newSessionId, title: "New Chat" };
+    const updatedSessions = [newSession, ...sessions];
+    
+    setSessions(updatedSessions);
+    localStorage.setItem("chat_sessions", JSON.stringify(updatedSessions));
+    setSessionId(newSessionId);
     setMessages([]);
+    setShowSidebar(true);
   };
 
   const handleSessionClick = (id) => {
@@ -116,30 +134,44 @@ export default function App() {
 
   const handleDeleteSession = async (id) => {
     try {
-      await axios.delete(`http://localhost:5000/memory/${id}`);
-      const updated = sessions.filter((s) => s.id !== id);
-      setSessions(updated);
-      localStorage.setItem("chat_sessions", JSON.stringify(updated));
+      // Delete from backend
+      await axios.delete(`http://localhost:5000/sessions/${id}`);
+      
+      // Update frontend state
+      const updatedSessions = sessions.filter(s => s.id !== id);
+      setSessions(updatedSessions);
+      localStorage.setItem("chat_sessions", JSON.stringify(updatedSessions));
+      
+      // Handle current session deletion
       if (id === sessionId) {
-        if (updated.length) setSessionId(updated[0].id);
-        else handleNewChat();
+        if (updatedSessions.length > 0) {
+          setSessionId(updatedSessions[0].id);
+        } else {
+          handleNewChat();
+        }
       }
-    } catch (err) {
-      console.error("Failed to delete session", err);
+      
+      // Hide sidebar if no sessions left
+      setShowSidebar(updatedSessions.length > 0);
+    } catch (error) {
+      console.error("Failed to delete session:", error);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!query.trim() || isLoading) return;
+    
     setIsLoading(true);
     const userMsg = { id: Date.now(), text: query, isUser: true };
-    setMessages((prev) => [...prev, userMsg]);
+    setMessages(prev => [...prev, userMsg]);
+    
     try {
       const { data } = await axios.post("http://localhost:5000/ask", {
         session_id: sessionId,
         query,
       });
+      
       if (data.sources?.length) {
         const sourcesMsg = {
           id: Date.now() + 1,
@@ -147,12 +179,14 @@ export default function App() {
           isUser: false,
           isSource: true,
         };
-        setMessages((prev) => [...prev, sourcesMsg]);
+        setMessages(prev => [...prev, sourcesMsg]);
       }
+      
       const botMsg = { id: Date.now() + 2, text: data.response, isUser: false };
-      setMessages((prev) => [...prev, botMsg]);
-    } catch {
-      setMessages((prev) => [
+      setMessages(prev => [...prev, botMsg]);
+    } catch (error) {
+      console.error("Error submitting query:", error);
+      setMessages(prev => [
         ...prev,
         { id: Date.now() + 1, text: "Error fetching response.", isUser: false },
       ]);
@@ -162,6 +196,7 @@ export default function App() {
     }
   };
 
+  // Auto-scroll to bottom of chat
   useEffect(() => {
     const container = document.getElementById("chat-container");
     if (container) container.scrollTop = container.scrollHeight;
@@ -172,53 +207,75 @@ export default function App() {
       className="flex h-screen"
       style={{ backgroundColor: colors.background, color: colors.text }}
     >
-      <aside
-        className="w-64 p-4 overflow-y-auto"
-        style={{ backgroundColor: colors.surface }}
-      >
-        <button
-          onClick={handleNewChat}
-          className="flex items-center gap-2 mb-4 px-3 py-2 rounded hover:opacity-80"
-          style={{ backgroundColor: colors.input, color: colors.text }}
+      {/* Sidebar */}
+      {showSidebar && (
+        <aside
+          className="w-64 p-4 overflow-y-auto"
+          style={{ backgroundColor: colors.surface }}
         >
-          <PlusIcon className="h-5 w-5" /> New chat
-        </button>
-        <nav className="space-y-2">
-          {sessions.map((s) => (
-            <div
-              key={s.id}
-              className="flex items-center justify-between px-3 py-2 rounded cursor-pointer"
-              style={{
-                backgroundColor:
-                  s.id === sessionId ? colors.input : "transparent",
-              }}
-            >
+          <button
+            onClick={handleNewChat}
+            className="flex items-center gap-2 mb-4 px-3 py-2 rounded hover:opacity-80"
+            style={{ backgroundColor: colors.input, color: colors.text }}
+          >
+            <PlusIcon className="h-5 w-5" /> New chat
+          </button>
+          <nav className="space-y-2">
+            {sessions.map((session) => (
               <div
-                onClick={() => handleSessionClick(s.id)}
-                className={s.id === sessionId ? "font-semibold" : ""}
+                key={session.id}
+                className="flex items-center justify-between px-3 py-2 rounded cursor-pointer"
+                style={{
+                  backgroundColor:
+                    session.id === sessionId ? colors.input : "transparent",
+                }}
               >
-                {s.title}
-              </div>
-              <div className="relative">
-                <EllipsisVerticalIcon
-                  className="h-5 w-5 cursor-pointer"
-                  onClick={() => setMenuOpen(menuOpen === s.id ? null : s.id)}
-                />
-                {menuOpen === s.id && (
-                  <div className="absolute right-0 mt-1 w-24 bg-white text-black dark:bg-black dark:text-white  border rounded shadow-lg z-10">
+                <div
+                  onClick={() => handleSessionClick(session.id)}
+                  className={session.id === sessionId ? "font-semibold" : ""}
+                >
+                  {session.title}
+                </div>
+                <div className="relative">
+                  <EllipsisVerticalIcon
+                    className="h-5 w-5 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuOpen(menuOpen === session.id ? null : session.id);
+                    }}
+                  />
+                  {menuOpen === session.id && (
                     <div
-                      className="px-2 py-1 text-sm hover:bg-black-300 dark:hover:bg-black-300 cursor-pointer"
-                      onClick={() => handleDeleteSession(s.id)}
+                      className="absolute right-0 mt-1 w-24 bg-white text-black dark:bg-black dark:text-white border rounded shadow-lg z-10"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      Delete
+                      <div
+                        className="px-2 py-1 text-sm hover:bg-gray-200 dark:hover:bg-gray-800 cursor-pointer"
+                        onClick={() => handleDeleteSession(session.id)}
+                      >
+                        Delete
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
-        </nav>
-      </aside>
+            ))}
+          </nav>
+        </aside>
+      )}
+
+      {/* Sidebar toggle button when hidden */}
+      {!showSidebar && (
+        <button
+          onClick={() => setShowSidebar(true)}
+          className="absolute left-0 top-1/2 z-10 p-2 rounded-r-full shadow"
+          style={{ backgroundColor: colors.surface }}
+        >
+          <EllipsisVerticalIcon className="h-5 w-5" />
+        </button>
+      )}
+
+      {/* Main content */}
       <div className="flex-1 flex flex-col">
         <header
           className="p-4 shadow flex justify-between items-center"
@@ -236,6 +293,7 @@ export default function App() {
             )}
           </button>
         </header>
+
         <div
           id="chat-container"
           className="flex-1 overflow-y-auto px-4 py-6"
@@ -252,9 +310,9 @@ export default function App() {
           ) : (
             <div className="space-y-4 max-w-3xl mx-auto">
               <AnimatePresence>
-                {messages.map((m) => (
+                {messages.map((message) => (
                   <motion.div
-                    key={m.id}
+                    key={message.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                   >
@@ -262,38 +320,38 @@ export default function App() {
                       <div
                         className="p-3 rounded-2xl break-words whitespace-pre-wrap overflow-x-auto max-w-[75%]"
                         style={{
-                          marginLeft: m.isUser ? "auto" : undefined,
-                          marginRight: m.isUser ? undefined : "auto",
-                          backgroundColor: m.isUser
+                          marginLeft: message.isUser ? "auto" : undefined,
+                          marginRight: message.isUser ? undefined : "auto",
+                          backgroundColor: message.isUser
                             ? colors.userBubble
-                            : m.isSource
+                            : message.isSource
                             ? "transparent"
                             : colors.botBubble,
-                          color: m.isUser ? "#fff" : colors.text,
+                          color: message.isUser ? "#fff" : colors.text,
                         }}
                       >
-                        {m.isSource ? (
-                          JSON.parse(m.text).map((src, idx) => (
+                        {message.isSource ? (
+                          JSON.parse(message.text).map((source, idx) => (
                             <div key={idx} className="mb-4">
                               <a
-                                href={src.url}
+                                href={source.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="underline"
                               >
-                                {src.url}
+                                {source.url}
                               </a>
                               <p className="mt-1 text-sm">
-                                {src.content.slice(0, 200)}...
+                                {source.content.slice(0, 200)}...
                               </p>
                             </div>
                           ))
                         ) : (
                           <div
                             dangerouslySetInnerHTML={{
-                              __html: m.isUser
-                                ? marked.parseInline(m.text)
-                                : marked(m.text),
+                              __html: message.isUser
+                                ? marked.parseInline(message.text)
+                                : marked(message.text),
                             }}
                           />
                         )}
@@ -324,6 +382,7 @@ export default function App() {
           )}
         </div>
 
+        {/* Input form */}
         <form
           onSubmit={handleSubmit}
           className="p-4 shadow-inner"
