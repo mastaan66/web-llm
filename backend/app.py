@@ -27,7 +27,7 @@ session_titles = {}
 
 # --- Utility Functions ---
 
-def get_search_results(query, max_results=3):
+def get_search_results(query, max_results=1):
     """Fetch top search results using DuckDuckGo"""
     with DDGS() as ddgs:
         results = ddgs.text(query, max_results=max_results)

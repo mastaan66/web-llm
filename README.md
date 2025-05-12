@@ -225,6 +225,18 @@ web-llm/
 
 ---
 
+## Snapshots
+
+![image1](/assets/picture1.png)
+![image2](/assets/picture2.png)
+![image3](/assets/picture3.png)
+![image4](/assets/picture4.png)
+![image5](/assets/picture5.png)
+![image6](/assets/picture6.png)
+![image7](/assets/picture7.png)
+
+---
+
 ## License
 
 This project is licensed under the MIT License.
