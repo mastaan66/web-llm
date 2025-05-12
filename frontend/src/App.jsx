@@ -33,28 +33,29 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(null);
   const [showSidebar, setShowSidebar] = useState(true);
 
-  // Initialize sessions and current session
   useEffect(() => {
     const storedSessions = JSON.parse(localStorage.getItem("chat_sessions") || "[]");
-    setSessions(storedSessions);
-    setShowSidebar(storedSessions.length > 0);
-    
     let currentSessionId = localStorage.getItem("current_session");
-    if (!currentSessionId || !storedSessions.some(s => s.id === currentSessionId)) {
+
+    const sessionExists = storedSessions.some(s => s.id === currentSessionId);
+    let updatedSessions = [...storedSessions];
+
+    if (!currentSessionId || !sessionExists) {
       currentSessionId = uuidv4();
       const newSession = { id: currentSessionId, title: "New Chat" };
-      const updatedSessions = [newSession, ...storedSessions];
-      setSessions(updatedSessions);
+      updatedSessions = [newSession, ...storedSessions];
       localStorage.setItem("chat_sessions", JSON.stringify(updatedSessions));
-      setShowSidebar(true);
+      localStorage.setItem("current_session", currentSessionId);
     }
+
+    setSessions(updatedSessions);
     setSessionId(currentSessionId);
+    setShowSidebar(updatedSessions.length > 0);
   }, []);
 
-  // Load messages for current session
   useEffect(() => {
     if (!sessionId) return;
-    
+
     const loadMessages = async () => {
       try {
         const response = await axios.get(`http://localhost:5000/memory/${sessionId}`);
@@ -67,7 +68,6 @@ export default function App() {
         );
       } catch (error) {
         console.error("Error loading messages:", error);
-        // If session doesn't exist in backend, create a fresh one
         if (error.response?.status === 404) {
           setMessages([]);
         }
@@ -77,13 +77,12 @@ export default function App() {
     loadMessages();
   }, [sessionId]);
 
-  // Update session titles when messages change
   useEffect(() => {
     if (!messages.length || !sessionId) return;
-    
+
     const firstUserMessage = messages.find(m => m.isUser);
     if (!firstUserMessage) return;
-    
+
     setSessions(prev => {
       const updated = prev.map(s =>
         s.id === sessionId
@@ -119,39 +118,38 @@ export default function App() {
     const newSessionId = uuidv4();
     const newSession = { id: newSessionId, title: "New Chat" };
     const updatedSessions = [newSession, ...sessions];
-    
+
     setSessions(updatedSessions);
-    localStorage.setItem("chat_sessions", JSON.stringify(updatedSessions));
     setSessionId(newSessionId);
     setMessages([]);
     setShowSidebar(true);
+    localStorage.setItem("chat_sessions", JSON.stringify(updatedSessions));
+    localStorage.setItem("current_session", newSessionId);
   };
 
   const handleSessionClick = (id) => {
     setMenuOpen(null);
     setSessionId(id);
+    localStorage.setItem("current_session", id);
   };
 
   const handleDeleteSession = async (id) => {
     try {
-      // Delete from backend
       await axios.delete(`http://localhost:5000/sessions/${id}`);
-      
-      // Update frontend state
+
       const updatedSessions = sessions.filter(s => s.id !== id);
       setSessions(updatedSessions);
       localStorage.setItem("chat_sessions", JSON.stringify(updatedSessions));
-      
-      // Handle current session deletion
+
       if (id === sessionId) {
         if (updatedSessions.length > 0) {
           setSessionId(updatedSessions[0].id);
+          localStorage.setItem("current_session", updatedSessions[0].id);
         } else {
           handleNewChat();
         }
       }
-      
-      // Hide sidebar if no sessions left
+
       setShowSidebar(updatedSessions.length > 0);
     } catch (error) {
       console.error("Failed to delete session:", error);
@@ -161,17 +159,17 @@ export default function App() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!query.trim() || isLoading) return;
-    
+
     setIsLoading(true);
     const userMsg = { id: Date.now(), text: query, isUser: true };
     setMessages(prev => [...prev, userMsg]);
-    
+
     try {
       const { data } = await axios.post("http://localhost:5000/ask", {
         session_id: sessionId,
         query,
       });
-      
+
       if (data.sources?.length) {
         const sourcesMsg = {
           id: Date.now() + 1,
@@ -181,7 +179,7 @@ export default function App() {
         };
         setMessages(prev => [...prev, sourcesMsg]);
       }
-      
+
       const botMsg = { id: Date.now() + 2, text: data.response, isUser: false };
       setMessages(prev => [...prev, botMsg]);
     } catch (error) {
@@ -196,7 +194,6 @@ export default function App() {
     }
   };
 
-  // Auto-scroll to bottom of chat
   useEffect(() => {
     const container = document.getElementById("chat-container");
     if (container) container.scrollTop = container.scrollHeight;
@@ -207,7 +204,6 @@ export default function App() {
       className="flex h-screen"
       style={{ backgroundColor: colors.background, color: colors.text }}
     >
-      {/* Sidebar */}
       {showSidebar && (
         <aside
           className="w-64 p-4 overflow-y-auto"
@@ -246,25 +242,24 @@ export default function App() {
                   />
                   {menuOpen === session.id && (
                     <div
-                      className="absolute right-0 mt-1 w-24 bg-white text-black dark:bg-black dark:text-white border rounded shadow-lg z-10"
+                      className="absolute right-0 mt-1 w-24 border rounded shadow-lg z-10"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <div
-                        className="px-2 py-1 text-sm hover:bg-gray-200 dark:hover:bg-gray-800 cursor-pointer"
+                        className="px-2 py-1 text-sm cursor-pointer text-black bg-white hover:bg-grey-300 dark:bg-black dark:text-white dark:hover:bg-white-300"
                         onClick={() => handleDeleteSession(session.id)}
                       >
                         Delete
                       </div>
                     </div>
                   )}
-                </div>
+                </div>  
               </div>
             ))}
           </nav>
         </aside>
       )}
 
-      {/* Sidebar toggle button when hidden */}
       {!showSidebar && (
         <button
           onClick={() => setShowSidebar(true)}
@@ -275,7 +270,6 @@ export default function App() {
         </button>
       )}
 
-      {/* Main content */}
       <div className="flex-1 flex flex-col">
         <header
           className="p-4 shadow flex justify-between items-center"
@@ -382,7 +376,6 @@ export default function App() {
           )}
         </div>
 
-        {/* Input form */}
         <form
           onSubmit={handleSubmit}
           className="p-4 shadow-inner"
