@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeHighlight from "rehype-highlight";
+import { marked } from "marked";
+import hljs from "highlight.js";
 import "highlight.js/styles/github.css";
 import {
   PaperAirplaneIcon,
@@ -13,6 +12,16 @@ import {
 } from "@heroicons/react/24/outline";
 import { motion, AnimatePresence } from "framer-motion";
 import { v4 as uuidv4 } from "uuid";
+
+// Configure marked to support syntax highlighting
+marked.setOptions({
+  highlight: (code, lang) => {
+    const validLang = hljs.getLanguage(lang) ? lang : "plaintext";
+    return hljs.highlight(code, { language: validLang }).value;
+  },
+  gfm: true,
+  breaks: true,
+});
 
 export default function App() {
   const [sessions, setSessions] = useState([]);
@@ -41,10 +50,15 @@ export default function App() {
   useEffect(() => {
     if (!sessionId) return;
     localStorage.setItem("current_session", sessionId);
-    axios.get(`http://localhost:5000/memory/${sessionId}`)
+    axios
+      .get(`http://localhost:5000/memory/${sessionId}`)
       .then((res) => {
         setMessages(
-          res.data.map((m, i) => ({ id: i, text: m.content, isUser: m.role === "user" }))
+          res.data.map((m, i) => ({
+            id: i,
+            text: m.content,
+            isUser: m.role === "user",
+          }))
         );
       })
       .catch(console.error);
@@ -154,8 +168,14 @@ export default function App() {
   }, [messages]);
 
   return (
-    <div className="flex h-screen" style={{ backgroundColor: colors.background, color: colors.text }}>
-      <aside className="w-64 p-4 overflow-y-auto" style={{ backgroundColor: colors.surface }}>
+    <div
+      className="flex h-screen"
+      style={{ backgroundColor: colors.background, color: colors.text }}
+    >
+      <aside
+        className="w-64 p-4 overflow-y-auto"
+        style={{ backgroundColor: colors.surface }}
+      >
         <button
           onClick={handleNewChat}
           className="flex items-center gap-2 mb-4 px-3 py-2 rounded hover:opacity-80"
@@ -168,7 +188,10 @@ export default function App() {
             <div
               key={s.id}
               className="flex items-center justify-between px-3 py-2 rounded cursor-pointer"
-              style={{ backgroundColor: s.id === sessionId ? colors.input : "transparent" }}
+              style={{
+                backgroundColor:
+                  s.id === sessionId ? colors.input : "transparent",
+              }}
             >
               <div
                 onClick={() => handleSessionClick(s.id)}
@@ -237,32 +260,43 @@ export default function App() {
                   >
                     <div className="w-full flex">
                       <div
-                        className="p-2 rounded-2xl max-w-[60%] flex-none"
+                        className="p-3 rounded-2xl break-words whitespace-pre-wrap overflow-x-auto max-w-[75%]"
                         style={{
-                          marginLeft: m.isUser ? 'auto' : undefined,
-                          marginRight: m.isUser ? undefined : 'auto',
+                          marginLeft: m.isUser ? "auto" : undefined,
+                          marginRight: m.isUser ? undefined : "auto",
                           backgroundColor: m.isUser
                             ? colors.userBubble
                             : m.isSource
-                            ? 'transparent'
+                            ? "transparent"
                             : colors.botBubble,
-                          color: m.isUser ? '#fff' : colors.text,
+                          color: m.isUser ? "#fff" : colors.text,
                         }}
                       >
-                        {m.isSource
-                          ? JSON.parse(m.text).map((src, idx) => (
-                              <div key={idx} className="mb-4">
-                                <a href={src.url} target="_blank" rel="noopener noreferrer" className="underline">
-                                  {src.url}
-                                </a>
-                                <p className="mt-1 text-sm">{src.content.slice(0, 200)}...</p>
-                              </div>
-                            ))
-                          : m.isUser
-                          ? <p style={{ margin: 0 }}>{m.text}</p>
-                          : (
-                              <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{m.text}</p>
-                            )}
+                        {m.isSource ? (
+                          JSON.parse(m.text).map((src, idx) => (
+                            <div key={idx} className="mb-4">
+                              <a
+                                href={src.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="underline"
+                              >
+                                {src.url}
+                              </a>
+                              <p className="mt-1 text-sm">
+                                {src.content.slice(0, 200)}...
+                              </p>
+                            </div>
+                          ))
+                        ) : (
+                          <div
+                            dangerouslySetInnerHTML={{
+                              __html: m.isUser
+                                ? marked.parseInline(m.text)
+                                : marked(m.text),
+                            }}
+                          />
+                        )}
                       </div>
                     </div>
                   </motion.div>
@@ -271,9 +305,18 @@ export default function App() {
               {isLoading && (
                 <div className="flex justify-center">
                   <div className="space-x-1 flex">
-                    <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: colors.spinner }} />
-                    <div className="w-2 h-2 rounded-full animate-bounce delay-100" style={{ backgroundColor: colors.spinner }} />
-                    <div className="w-2 h-2 rounded-full animate-bounce delay-200" style={{ backgroundColor: colors.spinner }} />
+                    <div
+                      className="w-2 h-2 rounded-full animate-bounce"
+                      style={{ backgroundColor: colors.spinner }}
+                    />
+                    <div
+                      className="w-2 h-2 rounded-full animate-bounce delay-100"
+                      style={{ backgroundColor: colors.spinner }}
+                    />
+                    <div
+                      className="w-2 h-2 rounded-full animate-bounce delay-200"
+                      style={{ backgroundColor: colors.spinner }}
+                    />
                   </div>
                 </div>
               )}
@@ -281,7 +324,11 @@ export default function App() {
           )}
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 shadow-inner" style={{ backgroundColor: colors.surface }}>
+        <form
+          onSubmit={handleSubmit}
+          className="p-4 shadow-inner"
+          style={{ backgroundColor: colors.surface }}
+        >
           <div className="max-w-3xl mx-auto flex gap-2">
             <input
               className="flex-1 p-3 rounded-lg outline-none"
@@ -296,7 +343,8 @@ export default function App() {
               disabled={!query.trim() || isLoading}
               className="p-3 rounded-lg flex items-center justify-center text-white"
               style={{
-                backgroundColor: !query.trim() || isLoading ? "#9ca3af" : colors.userBubble,
+                backgroundColor:
+                  !query.trim() || isLoading ? "#9ca3af" : colors.userBubble,
               }}
             >
               {isLoading ? "…" : <PaperAirplaneIcon className="h-5 w-5" />}
