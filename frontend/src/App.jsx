@@ -242,11 +242,11 @@ export default function App() {
                   />
                   {menuOpen === session.id && (
                     <div
-                      className="absolute right-0 mt-1 w-24 border rounded shadow-lg z-10"
+                      className="absolute right-0 mt-1 w-24 border rounded shadow-lg z-10 dark:hover:bg-gray-700 hover:bg-gray-300 bg-white text-black dark:text-white dark:bg-gray-700"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <div
-                        className="px-2 py-1 text-sm cursor-pointer text-black bg-white hover:bg-grey-300 dark:bg-black dark:text-white dark:hover:bg-white-300"
+                        className="px-2 py-1 text-sm cursor-pointer"
                         onClick={() => handleDeleteSession(session.id)}
                       >
                         Delete
