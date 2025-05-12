@@ -9,7 +9,8 @@ import {
   SunIcon,
   MoonIcon,
   PlusIcon,
-} from "@heroicons/react/24/solid";
+  EllipsisVerticalIcon,
+} from "@heroicons/react/24/outline";
 import { motion, AnimatePresence } from "framer-motion";
 import { v4 as uuidv4 } from "uuid";
 
@@ -20,11 +21,11 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(null);
 
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem("chat_sessions") || "[]");
     setSessions(stored);
-
     let sid = localStorage.getItem("current_session");
     if (!sid) {
       sid = uuidv4();
@@ -40,15 +41,10 @@ export default function App() {
   useEffect(() => {
     if (!sessionId) return;
     localStorage.setItem("current_session", sessionId);
-    axios
-      .get(`http://localhost:5000/memory/${sessionId}`)
+    axios.get(`http://localhost:5000/memory/${sessionId}`)
       .then((res) => {
         setMessages(
-          res.data.map((m, i) => ({
-            id: i,
-            text: m.content,
-            isUser: m.role === "user",
-          }))
+          res.data.map((m, i) => ({ id: i, text: m.content, isUser: m.role === "user" }))
         );
       })
       .catch(console.error);
@@ -100,27 +96,50 @@ export default function App() {
   };
 
   const handleSessionClick = (id) => {
+    setMenuOpen(null);
     setSessionId(id);
+  };
+
+  const handleDeleteSession = async (id) => {
+    try {
+      await axios.delete(`http://localhost:5000/memory/${id}`);
+      const updated = sessions.filter((s) => s.id !== id);
+      setSessions(updated);
+      localStorage.setItem("chat_sessions", JSON.stringify(updated));
+      if (id === sessionId) {
+        if (updated.length) setSessionId(updated[0].id);
+        else handleNewChat();
+      }
+    } catch (err) {
+      console.error("Failed to delete session", err);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!query.trim() || isLoading) return;
-
     setIsLoading(true);
     const userMsg = { id: Date.now(), text: query, isUser: true };
-    setMessages((m) => [...m, userMsg]);
-
+    setMessages((prev) => [...prev, userMsg]);
     try {
       const { data } = await axios.post("http://localhost:5000/ask", {
         session_id: sessionId,
         query,
       });
-      const botMsg = { id: Date.now() + 1, text: data.response, isUser: false };
-      setMessages((m) => [...m, botMsg]);
+      if (data.sources?.length) {
+        const sourcesMsg = {
+          id: Date.now() + 1,
+          text: JSON.stringify(data.sources),
+          isUser: false,
+          isSource: true,
+        };
+        setMessages((prev) => [...prev, sourcesMsg]);
+      }
+      const botMsg = { id: Date.now() + 2, text: data.response, isUser: false };
+      setMessages((prev) => [...prev, botMsg]);
     } catch {
-      setMessages((m) => [
-        ...m,
+      setMessages((prev) => [
+        ...prev,
         { id: Date.now() + 1, text: "Error fetching response.", isUser: false },
       ]);
     } finally {
@@ -130,13 +149,13 @@ export default function App() {
   };
 
   useEffect(() => {
-    const c = document.getElementById("chat-container");
-    if (c) c.scrollTop = c.scrollHeight;
+    const container = document.getElementById("chat-container");
+    if (container) container.scrollTop = container.scrollHeight;
   }, [messages]);
 
   return (
     <div className="flex h-screen" style={{ backgroundColor: colors.background, color: colors.text }}>
-      <aside className="w-64 p-4 overflow-y-auto" style={{ backgroundColor: colors.surface, color: colors.text }}>
+      <aside className="w-64 p-4 overflow-y-auto" style={{ backgroundColor: colors.surface }}>
         <button
           onClick={handleNewChat}
           className="flex items-center gap-2 mb-4 px-3 py-2 rounded hover:opacity-80"
@@ -144,28 +163,49 @@ export default function App() {
         >
           <PlusIcon className="h-5 w-5" /> New chat
         </button>
-
         <nav className="space-y-2">
           {sessions.map((s) => (
             <div
               key={s.id}
-              onClick={() => handleSessionClick(s.id)}
-              className={`cursor-pointer px-3 py-2 rounded ${s.id === sessionId ? "font-semibold" : "opacity-80"} hover:opacity-100`}
-              style={{
-                backgroundColor: s.id === sessionId ? colors.input : "transparent",
-                color: colors.text,
-              }}
+              className="flex items-center justify-between px-3 py-2 rounded cursor-pointer"
+              style={{ backgroundColor: s.id === sessionId ? colors.input : "transparent" }}
             >
-              {s.title}
+              <div
+                onClick={() => handleSessionClick(s.id)}
+                className={s.id === sessionId ? "font-semibold" : ""}
+              >
+                {s.title}
+              </div>
+              <div className="relative">
+                <EllipsisVerticalIcon
+                  className="h-5 w-5 cursor-pointer"
+                  onClick={() => setMenuOpen(menuOpen === s.id ? null : s.id)}
+                />
+                {menuOpen === s.id && (
+                  <div className="absolute right-0 mt-1 w-24 bg-white text-black dark:bg-black dark:text-white  border rounded shadow-lg z-10">
+                    <div
+                      className="px-2 py-1 text-sm hover:bg-black-300 dark:hover:bg-black-300 cursor-pointer"
+                      onClick={() => handleDeleteSession(s.id)}
+                    >
+                      Delete
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           ))}
         </nav>
       </aside>
-
       <div className="flex-1 flex flex-col">
-        <header className="p-4 shadow flex justify-between items-center" style={{ backgroundColor: colors.surface, color: colors.text }}>
+        <header
+          className="p-4 shadow flex justify-between items-center"
+          style={{ backgroundColor: colors.surface }}
+        >
           <h1 className="text-xl font-bold">chat.ai</h1>
-          <button onClick={() => setDarkMode(!darkMode)} className="p-2 rounded-full">
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            className="p-2 rounded-full"
+          >
             {darkMode ? (
               <SunIcon className="h-6 w-6 text-yellow-400" />
             ) : (
@@ -173,63 +213,63 @@ export default function App() {
             )}
           </button>
         </header>
-
-        <div id="chat-container" className="flex-1 overflow-y-auto px-4 py-6" style={{ backgroundColor: colors.background, color: colors.text }}>
+        <div
+          id="chat-container"
+          className="flex-1 overflow-y-auto px-4 py-6"
+          style={{ backgroundColor: colors.background }}
+        >
           {messages.length === 0 ? (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center mt-20 opacity-70">
-              <p style={{ color: colors.text }}>Welcome! Start by typing a message.</p>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-center mt-20 opacity-70"
+            >
+              <p>Welcome! Start by typing a message.</p>
             </motion.div>
           ) : (
             <div className="space-y-4 max-w-3xl mx-auto">
               <AnimatePresence>
                 {messages.map((m) => (
-                  <motion.div key={m.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                    <div
-                      className={`p-3 rounded-2xl max-w-[75%] ${m.isUser ? "ml-auto" : ""}`}
-                      style={{
-                        backgroundColor: m.isUser ? colors.userBubble : colors.botBubble,
-                        color: m.isUser ? "#fff" : colors.text,
-                      }}
-                    >
-                      {m.isUser ? (
-                        <p style={{ margin: 0 }}>{m.text}</p>
-                      ) : (
-                        <div className="prose prose-sm dark:prose-invert">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            rehypePlugins={[rehypeHighlight]}
-                            components={{
-                              code({ node, inline, className, children, ...props }) {
-                                return inline ? (
-                                  <code
-                                    style={{
-                                      backgroundColor: "#eee",
-                                      padding: "0.2em 0.4em",
-                                      borderRadius: "4px",
-                                    }}
-                                    {...props}
-                                  >
-                                    {children}
-                                  </code>
-                                ) : (
-                                  <pre className={className} style={{ overflowX: "auto", padding: "0.5rem", margin: 0 }}>
-                                    <code {...props}>{children}</code>
-                                  </pre>
-                                );
-                              },
-                            }}
-                          >
-                            {m.text}
-                          </ReactMarkdown>
-                        </div>
-                      )}
+                  <motion.div
+                    key={m.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                  >
+                    <div className="w-full flex">
+                      <div
+                        className="p-2 rounded-2xl max-w-[60%] flex-none"
+                        style={{
+                          marginLeft: m.isUser ? 'auto' : undefined,
+                          marginRight: m.isUser ? undefined : 'auto',
+                          backgroundColor: m.isUser
+                            ? colors.userBubble
+                            : m.isSource
+                            ? 'transparent'
+                            : colors.botBubble,
+                          color: m.isUser ? '#fff' : colors.text,
+                        }}
+                      >
+                        {m.isSource
+                          ? JSON.parse(m.text).map((src, idx) => (
+                              <div key={idx} className="mb-4">
+                                <a href={src.url} target="_blank" rel="noopener noreferrer" className="underline">
+                                  {src.url}
+                                </a>
+                                <p className="mt-1 text-sm">{src.content.slice(0, 200)}...</p>
+                              </div>
+                            ))
+                          : m.isUser
+                          ? <p style={{ margin: 0 }}>{m.text}</p>
+                          : (
+                              <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{m.text}</p>
+                            )}
+                      </div>
                     </div>
                   </motion.div>
                 ))}
               </AnimatePresence>
-
               {isLoading && (
-                <div className="flex">
+                <div className="flex justify-center">
                   <div className="space-x-1 flex">
                     <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: colors.spinner }} />
                     <div className="w-2 h-2 rounded-full animate-bounce delay-100" style={{ backgroundColor: colors.spinner }} />
@@ -241,7 +281,7 @@ export default function App() {
           )}
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 shadow-inner" style={{ backgroundColor: colors.surface, color: colors.text }}>
+        <form onSubmit={handleSubmit} className="p-4 shadow-inner" style={{ backgroundColor: colors.surface }}>
           <div className="max-w-3xl mx-auto flex gap-2">
             <input
               className="flex-1 p-3 rounded-lg outline-none"
@@ -254,10 +294,9 @@ export default function App() {
             <button
               type="submit"
               disabled={!query.trim() || isLoading}
-              className="p-3 rounded-lg flex items-center justify-center"
+              className="p-3 rounded-lg flex items-center justify-center text-white"
               style={{
                 backgroundColor: !query.trim() || isLoading ? "#9ca3af" : colors.userBubble,
-                color: "#fff",
               }}
             >
               {isLoading ? "…" : <PaperAirplaneIcon className="h-5 w-5" />}
