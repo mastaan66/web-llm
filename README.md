@@ -168,13 +168,13 @@ Adjust timeout and `max_results` in `get_search_results()` within `app.py` if ne
 
 ### API Endpoints
 
-* `POST /sessions` — Create a new session
-* `GET /sessions` — List sessions
-* `DELETE /sessions/:id` — Delete session
-* `POST /sessions/:id/title` — Update session title
-* `GET /memory/:id` — Retrieve message history
-* `DELETE /memory/:id` — Clear session history
-* `POST /ask` — Submit user query, returns `{ response, sources, session_id }`
+* `POST /sessions` - Create a new session
+* `GET /sessions` - List sessions
+* `DELETE /sessions/:id` - Delete session
+* `POST /sessions/:id/title` - Update session title
+* `GET /memory/:id` - Retrieve message history
+* `DELETE /memory/:id` - Clear session history
+* `POST /ask` - Submit user query, returns `{ response, sources, session_id }`
 
 ### Frontend Workflow
 
