@@ -1,4 +1,4 @@
-**Chat.AI Web Assistant**
+# Chat.AI Web Assistant
 
 An end-to-end, full-stack web application combining a Flask-based backend LLM assistant with a React-powered chat frontend. Users can perform conversational queries enriched with live web search context, manage multiple sessions, and enjoy Markdown-rendered responses with syntax highlighting.
 
